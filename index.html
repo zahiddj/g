@@ -38,12 +38,12 @@
         let scoreText;
 
         function preload() {
-            // Load assets
-            this.load.image('background', 'assets/city_background.png'); // City map
-            this.load.image('player', 'assets/player.png'); // Player sprite
-            this.load.image('coin', 'assets/coin.png'); // Collectible item
-            this.load.image('car', 'assets/car.png'); // Obstacle
-            this.load.image('tree', 'assets/tree.png'); // Environment
+            // Load assets using proper links
+            this.load.image('background', 'https://i.imgur.com/3ZQZQ9m.png'); // City map
+            this.load.image('player', 'https://i.imgur.com/3ZQZQ9m.png'); // Player sprite (replace with a proper player image)
+            this.load.image('coin', 'https://i.imgur.com/3ZQZQ9m.png'); // Collectible item (replace with a proper coin image)
+            this.load.image('car', 'https://i.imgur.com/3ZQZQ9m.png'); // Obstacle (replace with a proper car image)
+            this.load.image('tree', 'https://i.imgur.com/3ZQZQ9m.png'); // Environment (replace with a proper tree image)
         }
 
         function create() {
@@ -106,14 +106,14 @@
         }
 
         function collectItem(player, collectible) {
-            collect ible.disableBody(true, true);
+            collectible.disableBody(true, true);
             score += 10;
             scoreText.setText('Score: ' + score);
         }
 
         function hitObstacle(player, car) {
             // Handle collision with car (e.g., reduce score or end game)
-            score -= 5;
+ score -= 5;
             scoreText.setText('Score: ' + score);
             player.setTint(0xff0000); // Change player color to red on hit
             this.time.delayedCall(1000, () => {
