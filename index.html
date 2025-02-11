@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Working 3D Collector</title>
+    <title>Chronicles of the Lost Memories</title>
     <style>
         * { margin: 0; padding: 0; }
         body { overflow: hidden; }
@@ -12,105 +12,289 @@
             color: #fff;
             font-family: Arial;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 1000;
+        }
+        #dialog {
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: white;
+            font-size: 1.2em;
         }
     </style>
 </head>
 <body>
-    <div id="hud">Score: <span id="score">0</span></div>
+    <div id="hud">
+        <div>Memories: <span id="score">0</span>/12</div>
+        <div>Time: <span id="time">Day</span></div>
+    </div>
+    <div id="dialog">Find the glowing memories around the village</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/PointerLockControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/stats.min.js"></script>
+
 <script>
 'use strict';
 
-class WorkingGame {
+class AdvancedGame {
     constructor() {
+        this.score = 0;
+        this.dayTime = 0;
         this.init();
-        this.createScene();
-        this.setupControls();
-        this.animate();
     }
 
-    init() {
-        // 1. Basic Three.js Setup
+    async init() {
+        // 1. Core Setup
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer();
+        this.renderer = new THREE.WebGLRenderer({ antialias: true });
+        this.renderer.shadowMap.enabled = true;
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         document.body.appendChild(this.renderer.domElement);
 
-        // 2. Immediate Visibility Check
-        this.renderer.setClearColor(0x87CEEB); // Sky blue background
+        // 2. Advanced Lighting
+        this.setupLighting();
+        
+        // 3. Environment
+        this.createWorld();
+        
+        // 4. Character
+        this.createCharacter();
+        
+        // 5. Game Systems
+        this.setupControls();
+        this.createParticles();
+        
+        // 6. Start Game
+        this.animate();
     }
 
-    createScene() {
-        // 3. Visible Ground (Green Plane)
-        const ground = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100),
-            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
-        );
-        ground.rotation.x = -Math.PI / 2;
-        this.scene.add(ground);
+    setupLighting() {
+        // HDR Environment
+        const envLoader = new THREE.CubeTextureLoader();
+        const envMap = envLoader.load([
+            'px.jpg', 'nx.jpg',
+            'py.jpg', 'ny.jpg',
+            'pz.jpg', 'nz.jpg'
+        ].map(file => `https://threejs.org/examples/textures/cube/pisa/${file}`));
+        
+        this.scene.environment = envMap;
+        this.scene.background = envMap;
 
-        // 4. Red Player Cube
-        this.player = new THREE.Mesh(
-            new THREE.BoxGeometry(1, 2, 1),
-            new THREE.MeshBasicMaterial({ color: 0xff0000 })
-        );
-        this.player.position.y = 1;
-        this.scene.add(this.player);
+        // Directional Light
+        this.sunLight = new THREE.DirectionalLight(0xffffff, 1);
+        this.sunLight.position.set(50, 100, 50);
+        this.sunLight.castShadow = true;
+        this.sunLight.shadow.mapSize.width = 2048;
+        this.sunLight.shadow.mapSize.height = 2048;
+        this.scene.add(this.sunLight);
+    }
 
-        // 5. Yellow Collectibles
-        for(let i = 0; i < 10; i++) {
-            const coin = new THREE.Mesh(
-                new THREE.SphereGeometry(0.5),
-                new THREE.MeshBasicMaterial({ color: 0xffff00 })
+    createWorld() {
+        // Terrain
+        const terrain = new THREE.Mesh(
+            new THREE.PlaneGeometry(200, 200, 50, 50),
+            new THREE.MeshStandardMaterial({
+                color: 0x3c8f3c,
+                metalness: 0.2,
+                roughness: 0.7
+            })
+        );
+        terrain.rotation.x = -Math.PI / 2;
+        terrain.receiveShadow = true;
+        this.scene.add(terrain);
+
+        // Village
+        this.createVillage();
+        this.createForest();
+        this.createRoad();
+        this.createCollectibles();
+    }
+
+    createVillage() {
+        // Houses
+        for(let i = 0; i < 8; i++) {
+            const house = new THREE.Mesh(
+                new THREE.BoxGeometry(5, 4, 5),
+                new THREE.MeshStandardMaterial({
+                    color: 0x8B4513,
+                    metalness: 0.4,
+                    roughness: 0.6
+                })
             );
-            coin.position.set(
-                Math.random() * 50 - 25,
-                1,
-                Math.random() * 50 - 25
+            house.position.set(
+                Math.random() * 80 - 40,
+                2,
+                Math.random() * 80 - 40
             );
-            this.scene.add(coin);
-            this.coins = this.coins || [];
-            this.coins.push(coin);
+            house.castShadow = true;
+            this.scene.add(house);
         }
+    }
 
-        // 6. Camera Positioning
-        this.camera.position.set(0, 15, 30);
-        this.camera.lookAt(0, 0, 0);
+    createForest() {
+        // Trees
+        for(let i = 0; i < 50; i++) {
+            const tree = new THREE.Group();
+            const trunk = new THREE.Mesh(
+                new THREE.CylinderGeometry(0.4, 0.5, 2),
+                new THREE.MeshStandardMaterial({ color: 0x4A3728 })
+            );
+            const leaves = new THREE.Mesh(
+                new THREE.SphereGeometry(2.5),
+                new THREE.MeshStandardMaterial({ color: 0x228B22 })
+            );
+            leaves.position.y = 1.5;
+            tree.add(trunk, leaves);
+            tree.position.set(
+                Math.random() * 180 - 90,
+                0,
+                Math.random() * 180 - 90
+            );
+            this.scene.add(tree);
+        }
+    }
+
+    createRoad() {
+        const road = new THREE.Mesh(
+            new THREE.PlaneGeometry(200, 8),
+            new THREE.MeshStandardMaterial({ color: 0x666666 })
+        );
+        road.rotation.x = -Math.PI / 2;
+        road.position.y = 0.1;
+        road.receiveShadow = true;
+        this.scene.add(road);
+    }
+
+    createCollectibles() {
+        // Memory fragments
+        for(let i = 0; i < 12; i++) {
+            const memory = new THREE.Mesh(
+                new THREE.IcosahedronGeometry(1, 3),
+                new THREE.MeshStandardMaterial({
+                    color: 0xFFD700,
+                    emissive: 0xFFD700,
+                    emissiveIntensity: 0.5,
+                    metalness: 0.8,
+                    roughness: 0.2
+                })
+            );
+            memory.position.set(
+                Math.random() * 80 - 40,
+                1.5,
+                Math.random() * 80 - 40
+            );
+            memory.castShadow = true;
+            this.scene.add(memory);
+            this.collectibles = this.collectibles || [];
+            this.collectibles.push(memory);
+        }
+    }
+
+    createCharacter() {
+        // First-person controller
+        this.controls = new THREE.PointerLockControls(this.camera, document.body);
+        this.scene.add(this.controls.getObject());
+        
+        document.addEventListener('click', () => {
+            this.controls.lock();
+        });
     }
 
     setupControls() {
-        document.addEventListener('keydown', (e) => {
-            const speed = 0.8;
-            switch(e.key) {
-                case 'ArrowUp': this.player.position.z -= speed; break;
-                case 'ArrowDown': this.player.position.z += speed; break;
-                case 'ArrowLeft': this.player.position.x -= speed; break;
-                case 'ArrowRight': this.player.position.x += speed; break;
-            }
-            this.checkCollisions();
-        });
+        this.moveState = { forward: false, backward: false, left: false, right: false };
+        document.addEventListener('keydown', e => this.onKeyDown(e));
+        document.addEventListener('keyup', e => this.onKeyUp(e));
     }
 
-    checkCollisions() {
-        this.coins.forEach((coin, index) => {
-            if(coin.position.distanceTo(this.player.position) < 1.5) {
-                this.scene.remove(coin);
-                this.coins.splice(index, 1);
-                document.getElementById('score').textContent = this.coins.length;
-            }
-        });
+    onKeyDown(event) {
+        switch(event.key.toLowerCase()) {
+            case 'w': this.moveState.forward = true; break;
+            case 's': this.moveState.backward = true; break;
+            case 'a': this.moveState.left = true; break;
+            case 'd': this.moveState.right = true; break;
+        }
+    }
+
+    onKeyUp(event) {
+        switch(event.key.toLowerCase()) {
+            case 'w': this.moveState.forward = false; break;
+            case 's': this.moveState.backward = false; break;
+            case 'a': this.moveState.left = false; break;
+            case 'd': this.moveState.right = false; break;
+        }
+    }
+
+    createParticles() {
+        this.particles = new THREE.BufferGeometry();
+        const positions = new Float32Array(1000 * 3);
+        for(let i = 0; i < 1000; i++) {
+            positions[i*3] = (Math.random() - 0.5) * 100;
+            positions[i*3+1] = Math.random() * 50;
+            positions[i*3+2] = (Math.random() - 0.5) * 100;
+        }
+        this.particles.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+        
+        this.particleSystem = new THREE.Points(
+            this.particles,
+            new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.1 })
+        );
+        this.scene.add(this.particleSystem);
+    }
+
+    updateCharacter(delta) {
+        const speed = 5 * delta;
+        const direction = new THREE.Vector3();
+        
+        if(this.moveState.forward) direction.z -= speed;
+        if(this.moveState.backward) direction.z += speed;
+        if(this.moveState.left) direction.x -= speed;
+        if(this.moveState.right) direction.x += speed;
+        
+        this.controls.moveRight(-direction.x);
+        this.controls.moveForward(-direction.z);
     }
 
     animate() {
         requestAnimationFrame(() => this.animate());
+        const delta = 0.016; // Approximate 60fps delta
+        
+        // Update systems
+        this.updateCharacter(delta);
+        this.updateDayNightCycle(delta);
+        this.checkCollisions();
+        
+        // Render
         this.renderer.render(this.scene, this.camera);
+    }
+
+    updateDayNightCycle(delta) {
+        this.dayTime += delta * 0.1;
+        this.sunLight.intensity = Math.sin(this.dayTime) * 0.5 + 0.5;
+        document.getElementById('time').textContent = 
+            this.sunLight.intensity > 0.5 ? 'Day' : 'Night';
+    }
+
+    checkCollisions() {
+        this.collectibles.forEach((mem, index) => {
+            if(mem.position.distanceTo(this.controls.getObject().position) < 2) {
+                this.scene.remove(mem);
+                this.collectibles.splice(index, 1);
+                document.getElementById('score').textContent = ++this.score;
+                
+                if(this.score === 12) {
+                    document.getElementById('dialog').textContent = 
+                        "All memories recovered! Find the lighthouse!";
+                }
+            }
+        });
     }
 }
 
 // Start Game
-new WorkingGame();
+new AdvancedGame();
 </script>
 </body>
 </html>
