@@ -117,8 +117,8 @@
             scoreText.setText('Score: ' + score);
             player.setTint(0xff0000); // Change player color to red on hit
             this.time.delayedCall(1000, () => {
-                player.clear Tint(); // Reset player color after 1 second
-            });
+                player.clearTint(); // Reset player color after 1 second
+ });
             player.setPosition(100, 450); // Reset player position after hit
         }
     </script>
