@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Stellar Miner - Space RPG</title>
+    <title>Stellar Miner - Working Version</title>
     <style>
         * { margin: 0; padding: 0; }
         body { overflow: hidden; background: #000; }
@@ -23,9 +23,22 @@
             padding: 20px;
             color: white;
             max-width: 500px;
+            text-align: center;
+        }
+        .shop { 
+            position: fixed; 
+            top: 20px; 
+            right: 20px; 
+            background: rgba(0,0,0,0.8);
+            padding: 15px;
+            color: white;
             display: none;
         }
-        .shop { position: fixed; top: 20px; right: 20px; }
+        button {
+            padding: 10px;
+            margin: 5px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -36,10 +49,10 @@
     </div>
     <div id="story">
         <h2>Chapter 1: The Asteroid Belt</h2>
-        <p>As a rookie space miner, your mission is to collect rare minerals from dangerous asteroid fields...</p>
+        <p>Collect 1000 credits to upgrade your ship!</p>
         <button onclick="startGame()">Begin Mission</button>
     </div>
-    <div class="shop" style="display:none;">
+    <div class="shop">
         <h3>Space Station Shop</h3>
         <button onclick="buyUpgrade('shield')">Upgrade Shield ($500)</button>
         <button onclick="buyUpgrade('laser')">Upgrade Laser ($300)</button>
@@ -52,6 +65,7 @@
 const game = {
     canvas: null,
     ctx: null,
+    lastTime: 0,
     player: {
         x: 400, y: 500,
         width: 40, height: 40,
@@ -64,16 +78,36 @@ const game = {
     },
     asteroids: [],
     enemies: [],
-    projectiles: [],
     particles: [],
     keys: {},
     wave: 1,
-    gameTime: 0,
     isMobile: /Mobi|Android/i.test(navigator.userAgent)
 };
 
-// Story and Game Flow
-document.getElementById('story').style.display = 'block';
+// Initialize game
+function init() {
+    game.canvas = document.getElementById('gameCanvas');
+    game.ctx = game.canvas.getContext('2d');
+    game.canvas.width = 800;
+    game.canvas.height = 600;
+
+    // Event listeners
+    document.addEventListener('keydown', e => game.keys[e.key] = true);
+    document.addEventListener('keyup', e => game.keys[e.key] = false);
+
+    if(game.isMobile) {
+        const setupTouch = (id, key) => {
+            const btn = document.getElementById(id);
+            btn.addEventListener('touchstart', () => game.keys[key] = true);
+            btn.addEventListener('touchend', () => game.keys[key] = false);
+        };
+        setupTouch('leftBtn', 'ArrowLeft');
+        setupTouch('rightBtn', 'ArrowRight');
+        setupTouch('shootBtn', ' ');
+    }
+
+    gameLoop(performance.now());
+}
 
 function startGame() {
     document.getElementById('story').style.display = 'none';
@@ -81,33 +115,17 @@ function startGame() {
     init();
 }
 
-function init() {
-    game.canvas = document.getElementById('gameCanvas');
-    game.ctx = game.canvas.getContext('2d');
-    game.canvas.width = 800;
-    game.canvas.height = 600;
-
-    // Event Listeners
-    document.addEventListener('keydown', e => game.keys[e.key] = true);
-    document.addEventListener('keyup', e => game.keys[e.key] = false);
-
-    if(game.isMobile) {
-        document.getElementById('mobileControls').style.display = 'flex';
-        // Add touch event listeners
-    }
-
-    gameLoop();
-}
-
 function buyUpgrade(type) {
     if(type === 'shield' && game.player.coins >= 500) {
         game.player.maxHealth += 50;
         game.player.health = game.player.maxHealth;
         game.player.coins -= 500;
+        document.querySelector('.shop').style.display = 'none';
     }
     if(type === 'laser' && game.player.coins >= 300) {
         game.player.laserPower++;
         game.player.coins -= 300;
+        document.querySelector('.shop').style.display = 'none';
     }
     updateHUD();
 }
@@ -159,10 +177,17 @@ function checkCollisions() {
             updateHUD();
         }
     });
+
+    // Level progression
+    if(game.player.coins >= game.player.level * 1000) {
+        game.player.level++;
+        game.wave++;
+        document.querySelector('.shop').style.display = 'block';
+    }
 }
 
 function distance(x1, y1, x2, y2) {
-    return Math.hypot(x2 - x1, y2 - y1);
+    return Math.sqrt((x2-x1)**2 + (y2-y1)**2);
 }
 
 function createParticles(x, y, color) {
@@ -178,7 +203,7 @@ function createParticles(x, y, color) {
 }
 
 function gameLoop(timestamp) {
-    const deltaTime = timestamp - game.lastTime || 0;
+    const deltaTime = timestamp - game.lastTime;
     game.lastTime = timestamp;
 
     // Clear canvas
@@ -196,14 +221,13 @@ function gameLoop(timestamp) {
 
     // Update entities
     checkCollisions();
-    drawEntities();
     
-    // Level progression
-    if(game.player.coins >= game.player.level * 1000) {
-        game.player.level++;
-        game.wave++;
-        document.querySelector('.shop').style.display = 'block';
-    }
+    // Move asteroids and enemies
+    game.asteroids.forEach(ast => ast.y += ast.speed);
+    game.enemies.forEach(enemy => enemy.y += enemy.speed);
+
+    // Draw everything
+    drawEntities();
 
     requestAnimationFrame(gameLoop);
 }
