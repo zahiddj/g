@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>The Memory Collector - Working Version</title>
+    <title>Working 3D Memory Collector</title>
     <style>
         * { margin: 0; padding: 0; }
         body { overflow: hidden; }
@@ -29,13 +29,12 @@
 </head>
 <body>
     <div id="hud">
-        <div>Memories Collected: <span id="score">0</span>/10</div>
-        <div>Time: <span id="time">Day</span></div>
+        <div>Memories: <span id="score">0</span>/10</div>
     </div>
     <div id="story">
         <h2>The Memory Collector</h2>
-        <p>After his grandfather's passing, 12-year-old Leo discovers a mysterious map leading to forgotten memories...</p>
-        <button onclick="startGame()">Begin Journey</button>
+        <p>Use arrow keys to move and collect golden memories!</p>
+        <button onclick="startGame()">Start Game</button>
     </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -43,115 +42,99 @@
 let scene, camera, renderer, boy;
 let collectibles = [];
 let score = 0;
-let directionalLight;
 
-class Game {
-    constructor() {
-        this.initScene();
-        this.createWorld();
-        this.setupControls();
-        this.animate();
-    }
+function init() {
+    // 1. Scene Setup
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+    renderer = new THREE.WebGLRenderer();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
 
-    initScene() {
-        // Scene setup
-        scene = new THREE.Scene();
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        renderer = new THREE.WebGLRenderer({ antialias: true });
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+    // 2. Basic Lighting (Essential)
+    const light = new THREE.PointLight(0xffffff, 1, 100);
+    light.position.set(0, 10, 10);
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x404040));
 
-        // Lighting
-        directionalLight = new THREE.DirectionalLight(0xffffff, 1);
-        directionalLight.position.set(0, 10, 10);
-        scene.add(directionalLight);
-        scene.add(new THREE.AmbientLight(0x404040));
-    }
+    // 3. Visible Ground Plane
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(100, 100),
+        new THREE.MeshBasicMaterial({ color: 0x3c8f3c })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    scene.add(ground);
 
-    createWorld() {
-        // Ground
-        const ground = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100),
-            new THREE.MeshStandardMaterial({ color: 0x3c8f3c })
+    // 4. Simple Boy Character (Visible)
+    const geometry = new THREE.SphereGeometry(1);
+    const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
+    boy = new THREE.Mesh(geometry, material);
+    boy.position.y = 1;
+    scene.add(boy);
+
+    // 5. Collectibles (Clearly Visible)
+    for(let i = 0; i < 10; i++) {
+        const memory = new THREE.Mesh(
+            new THREE.SphereGeometry(0.5),
+            new THREE.MeshBasicMaterial({ color: 0xFFD700 })
         );
-        ground.rotation.x = -Math.PI / 2;
-        scene.add(ground);
+        memory.position.set(
+            Math.random() * 50 - 25,
+            1,
+            Math.random() * 50 - 25
+        );
+        collectibles.push(memory);
+        scene.add(memory);
+    }
 
-        // Boy character
-        const geometry = new THREE.CapsuleGeometry(0.5, 1, 4, 8);
-        const material = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-        boy = new THREE.Mesh(geometry, material);
-        boy.position.y = 1;
-        scene.add(boy);
+    // 6. Camera Setup
+    camera.position.set(0, 20, 30);
+    camera.lookAt(0, 0, 0);
 
-        // Collectibles
-        for(let i = 0; i < 10; i++) {
-            const memory = new THREE.Mesh(
-                new THREE.SphereGeometry(0.5),
-                new THREE.MeshStandardMaterial({ color: 0xFFD700 })
-            );
-            memory.position.set(
-                Math.random() * 80 - 40,
-                1,
-                Math.random() * 80 - 40
-            );
-            collectibles.push(memory);
-            scene.add(memory);
+    // 7. Controls
+    document.addEventListener('keydown', (e) => {
+        const speed = 1;
+        switch(e.key) {
+            case 'ArrowUp': boy.position.z -= speed; break;
+            case 'ArrowDown': boy.position.z += speed; break;
+            case 'ArrowLeft': boy.position.x -= speed; break;
+            case 'ArrowRight': boy.position.x += speed; break;
         }
+        checkCollisions();
+    });
 
-        // Camera position
-        camera.position.set(0, 10, 20);
-        camera.lookAt(0, 0, 0);
-    }
+    // 8. Start animation
+    animate();
+}
 
-    setupControls() {
-        document.addEventListener('keydown', (e) => {
-            const speed = 0.5;
-            switch(e.key) {
-                case 'ArrowUp': boy.position.z -= speed; break;
-                case 'ArrowDown': boy.position.z += speed; break;
-                case 'ArrowLeft': boy.position.x -= speed; break;
-                case 'ArrowRight': boy.position.x += speed; break;
+function checkCollisions() {
+    collectibles.forEach((mem, index) => {
+        if(boy.position.distanceTo(mem.position) < 2) {
+            scene.remove(mem);
+            collectibles.splice(index, 1);
+            score++;
+            document.getElementById('score').textContent = score;
+            
+            if(score === 10) {
+                document.getElementById('story').innerHTML = `
+                    <h2>Congratulations!</h2>
+                    <p>All memories collected!</p>
+                    <button onclick="location.reload()">Play Again</button>
+                `;
+                document.getElementById('story').style.display = 'block';
             }
-            this.checkCollisions();
-        });
-    }
+        }
+    });
+}
 
-    checkCollisions() {
-        collectibles.forEach((mem, index) => {
-            if(boy.position.distanceTo(mem.position) < 2) {
-                scene.remove(mem);
-                collectibles.splice(index, 1);
-                score++;
-                document.getElementById('score').textContent = score;
-                
-                if(score === 10) {
-                    document.getElementById('story').innerHTML = `
-                        <h2>Congratulations!</h2>
-                        <p>You've found all of grandfather's memories!</p>
-                    `;
-                    document.getElementById('story').style.display = 'block';
-                }
-            }
-        });
-    }
-
-    animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        // Day/night cycle
-        const time = Date.now() * 0.001;
-        directionalLight.intensity = Math.sin(time * 0.2) * 0.5 + 0.5;
-        document.getElementById('time').textContent = 
-            directionalLight.intensity > 0.5 ? 'Day' : 'Night';
-
-        renderer.render(scene, camera);
-    }
+function animate() {
+    requestAnimationFrame(animate);
+    renderer.render(scene, camera);
 }
 
 function startGame() {
     document.getElementById('story').style.display = 'none';
-    new Game();
+    init();
 }
 </script>
 </body>
