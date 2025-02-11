@@ -1,182 +1,101 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Epic Memory Quest - AAA Graphics</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Urban Collector</title>
     <style>
-        * { margin: 0; padding: 0; }
-        body { overflow: hidden; }
-        #hud {
-            position: fixed;
-            top: 20px;
-            left: 20px;
-            color: #fff;
-            font-family: Arial;
-            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
-            z-index: 1000;
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background: #87CEEB; /* Sky color */
         }
     </style>
 </head>
 <body>
-    <div id="hud">
-        <div>Memories: <span id="score">0</span>/12</div>
-        <div>FPS: <span id="fps">0</span></div>
-    </div>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+        // Game Variables
+        let player = { x: 50, y: 50, width: 30, height: 30, color: 'blue' };
+        let collectibles = [];
+        let score = 0;
 
-<script>
-'use strict';
-
-class AAA_Game {
-    constructor() {
-        this.init();
-        this.createWorld();
-        this.setupPostProcessing();
-        this.animate();
-    }
-
-    async init() {
-        // 1. Core Render System
-        this.renderer = new THREE.WebGLRenderer({
-            antialias: true,
-            powerPreference: "high-performance"
-        });
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(this.renderer.domElement);
-
-        // 2. Scene Setup
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 5, 15);
-
-        // 3. HDR Environment
-        await this.loadEnvironment();
-    }
-
-    async loadEnvironment() {
-        const envLoader = new THREE.CubeTextureLoader()
-            .setPath('https://threejs.org/examples/textures/cube/pisa/');
-        
-        this.scene.environment = await new Promise(resolve => 
-            envLoader.load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'], resolve)
-        );
-        this.scene.background = this.scene.environment;
-    }
-
-    async createWorld() {
-        // 4. Terrain with Displacement
-        const terrain = new THREE.Mesh(
-            new THREE.PlaneGeometry(200, 200, 100, 100),
-            new THREE.MeshStandardMaterial({
-                color: 0x3c8f3c,
-                displacementScale: 2,
-                metalness: 0.3,
-                roughness: 0.7
-            })
-        );
-        terrain.rotation.x = -Math.PI / 2;
-        terrain.receiveShadow = true;
-        this.scene.add(terrain);
-
-        // 5. Advanced Character Model
-        const loader = new THREE.GLTFLoader();
-        this.player = await new Promise(resolve => 
-            loader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/models/gltf/Xbot/glTF/Xbot.gltf', gltf => resolve(gltf.scene))
-        );
-        this.player.scale.set(0.5, 0.5, 0.5);
-        this.player.position.y = 1;
-        this.player.traverse(child => child.castShadow = true);
-        this.scene.add(this.player);
-
-        // 6. Complex Collectibles
-        this.createCollectibles();
-        this.createCityscape();
-    }
-
-    createCollectibles() {
-        const memoryGeometry = new THREE.IcosahedronGeometry(1, 5);
-        const memoryMaterial = new THREE.MeshStandardMaterial({
-            color: 0xFFD700,
-            emissive: 0xFFD700,
-            emissiveIntensity: 0.8,
-            metalness: 0.9,
-            roughness: 0.1
-        });
-
-        for(let i = 0; i < 12; i++) {
-            const memory = new THREE.Mesh(memoryGeometry, memoryMaterial);
-            memory.position.set(
-                Math.random() * 40 - 20,
-                1.5,
-                Math.random() * 40 - 20
-            );
-            memory.castShadow = true;
-            this.scene.add(memory);
-            this.collectibles = this.collectibles || [];
-            this.collectibles.push(memory);
+        // Initialize Game
+        function init() {
+            createCollectibles();
+            requestAnimationFrame(gameLoop);
         }
-    }
 
-    createCityscape() {
-        // 7. Complex Buildings
-        for(let i = 0; i < 20; i++) {
-            const building = new THREE.Mesh(
-                new THREE.BoxGeometry(5, 10 + Math.random() * 20, 5),
-                new THREE.MeshStandardMaterial({
-                    color: 0x808080,
-                    metalness: 0.4,
-                    roughness: 0.6
-                })
-            );
-            building.position.set(
-                Math.random() * 100 - 50,
-                5,
-                Math.random() * 100 - 50
-            );
-            building.castShadow = true;
-            this.scene.add(building);
+        // Create Collectibles
+        function createCollectibles() {
+            for (let i = 0; i < 10; i++) {
+                collectibles.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    width: 20,
+                    height: 20,
+                    color: 'gold'
+                });
+            }
         }
-    }
 
-    setupPostProcessing() {
-        // 8. Bloom Effect
-        this.composer = new THREE.EffectComposer(this.renderer);
-        this.composer.addPass(new THREE.RenderPass(this.scene, this.camera));
-        
-        this.bloomPass = new THREE.UnrealBloomPass(
-            new THREE.Vector2(window.innerWidth, window.innerHeight),
-            1.5, 0.4, 0.85
-        );
-        this.composer.addPass(this.bloomPass);
-    }
+        // Game Loop
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
 
-    animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        // 9. Dynamic Elements
-        if(this.collectibles) {
-            this.collectibles.forEach(mem => {
-                mem.rotation.y += 0.01;
-                mem.position.y = Math.sin(Date.now() * 0.001) * 0.5 + 1.5;
+        // Update Game State
+        function update() {
+            // Handle player movement (example: arrow keys)
+            document.addEventListener('keydown', (event) => {
+                if (event.key === 'ArrowUp') player.y -= 5;
+                if (event.key === 'ArrowDown') player.y += 5;
+                if (event.key === 'ArrowLeft') player.x -= 5;
+                if (event.key === 'ArrowRight') player.x += 5;
+            });
+
+            // Check for collisions with collectibles
+            collectibles = collectibles.filter(collectible => {
+                if (isColliding(player, collectible)) {
+                    score++;
+                    return false; // Remove collectible
+                }
+                return true; // Keep collectible
             });
         }
 
-        // 10. Performance Monitoring
-        document.getElementById('fps').textContent = Math.round(this.renderer.info.render.frame / 1000);
-        
-        this.composer.render();
-    }
-}
+        // Draw Game Elements
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = player.color;
+            ctx.fillRect(player.x, player.y, player.width, player.height);
 
-// Start Game
-new AAA_Game();
-</script>
+            collectibles.forEach(collectible => {
+                ctx.fillStyle = collectible.color;
+                ctx.fillRect(collectible.x, collectible.y, collectible.width, collectible.height);
+            });
+
+            // Display Score
+            ctx.fillStyle = 'black';
+            ctx.font = '20px Arial';
+            ctx.fillText(`Score: ${score}`, 10, 20);
+        }
+
+        // Collision Detection
+        function isColliding(rect1, rect2) {
+            return rect1.x < rect2.x + rect2.width &&
+                   rect1.x + rect1.width > rect2.x &&
+                   rect1.y < rect2.y + rect2.height &&
+                   rect1.y + rect1.height > rect2.y;
+        }
+
+        // Start the Game
+        init();
+    </script>
 </body>
 </html>
