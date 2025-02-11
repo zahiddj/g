@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Memory Quest - Verified Advanced Version</title>
+    <title>Epic Memory Quest - AAA Graphics</title>
     <style>
         * { margin: 0; padding: 0; }
         body { overflow: hidden; }
@@ -14,13 +14,6 @@
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
             z-index: 1000;
         }
-        #debug {
-            position: fixed;
-            bottom: 20px;
-            left: 20px;
-            color: #0f0;
-            font-family: monospace;
-        }
     </style>
 </head>
 <body>
@@ -28,210 +21,162 @@
         <div>Memories: <span id="score">0</span>/12</div>
         <div>FPS: <span id="fps">0</span></div>
     </div>
-    <div id="debug">Initializing...</div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
 <script>
 'use strict';
 
-class MemoryQuest {
+class AAA_Game {
     constructor() {
-        this.initState = {
-            threejs: false,
-            renderer: false,
-            scene: false,
-            camera: false,
-            controls: false
-        };
-        
-        try {
-            this.initializeEngine();
-            this.createScene();
-            this.setupGameSystems();
-            this.setupDebugging();
-            this.animate();
-        } catch (error) {
-            this.showFatalError(error);
-        }
+        this.init();
+        this.createWorld();
+        this.setupPostProcessing();
+        this.animate();
     }
 
-    initializeEngine() {
-        // 1. Three.js Core
-        if(!THREE) throw new Error('Three.js failed to load');
-        this.initState.threejs = true;
-
-        // 2. Renderer
+    async init() {
+        // 1. Core Render System
         this.renderer = new THREE.WebGLRenderer({
             antialias: true,
             powerPreference: "high-performance"
         });
+        this.renderer.setPixelRatio(window.devicePixelRatio);
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
         document.body.appendChild(this.renderer.domElement);
-        this.initState.renderer = true;
 
-        // 3. Scene
+        // 2. Scene Setup
         this.scene = new THREE.Scene();
-        this.initState.scene = true;
-
-        // 4. Camera
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        this.camera.position.set(0, 5, 10);
-        this.initState.camera = true;
+        this.camera.position.set(0, 5, 15);
 
-        // 5. Lighting
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(0, 10, 10);
-        light.castShadow = true;
-        this.scene.add(light);
-        this.scene.add(new THREE.AmbientLight(0x404040));
+        // 3. HDR Environment
+        await this.loadEnvironment();
     }
 
-    createScene() {
-        // Ground
-        const ground = new THREE.Mesh(
-            new THREE.PlaneGeometry(100, 100),
-            new THREE.MeshStandardMaterial({ color: 0x3c8f3c })
+    async loadEnvironment() {
+        const envLoader = new THREE.CubeTextureLoader()
+            .setPath('https://threejs.org/examples/textures/cube/pisa/');
+        
+        this.scene.environment = await new Promise(resolve => 
+            envLoader.load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png'], resolve)
         );
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        this.scene.add(ground);
+        this.scene.background = this.scene.environment;
+    }
 
-        // Player
-        this.player = new THREE.Mesh(
-            new THREE.CapsuleGeometry(0.5, 1.5, 8, 16),
-            new THREE.MeshStandardMaterial({ color: 0xff4444 })
+    async createWorld() {
+        // 4. Terrain with Displacement
+        const terrain = new THREE.Mesh(
+            new THREE.PlaneGeometry(200, 200, 100, 100),
+            new THREE.MeshStandardMaterial({
+                color: 0x3c8f3c,
+                displacementScale: 2,
+                metalness: 0.3,
+                roughness: 0.7
+            })
         );
-        this.player.castShadow = true;
-        this.player.position.y = 1.5;
+        terrain.rotation.x = -Math.PI / 2;
+        terrain.receiveShadow = true;
+        this.scene.add(terrain);
+
+        // 5. Advanced Character Model
+        const loader = new THREE.GLTFLoader();
+        this.player = await new Promise(resolve => 
+            loader.load('https://cdn.jsdelivr.net/gh/mrdoob/three.js@r128/examples/models/gltf/Xbot/glTF/Xbot.gltf', gltf => resolve(gltf.scene))
+        );
+        this.player.scale.set(0.5, 0.5, 0.5);
+        this.player.position.y = 1;
+        this.player.traverse(child => child.castShadow = true);
         this.scene.add(this.player);
 
-        // Collectibles
-        this.collectibles = [];
+        // 6. Complex Collectibles
+        this.createCollectibles();
+        this.createCityscape();
+    }
+
+    createCollectibles() {
+        const memoryGeometry = new THREE.IcosahedronGeometry(1, 5);
+        const memoryMaterial = new THREE.MeshStandardMaterial({
+            color: 0xFFD700,
+            emissive: 0xFFD700,
+            emissiveIntensity: 0.8,
+            metalness: 0.9,
+            roughness: 0.1
+        });
+
         for(let i = 0; i < 12; i++) {
-            const memory = new THREE.Mesh(
-                new THREE.IcosahedronGeometry(0.5, 3),
-                new THREE.MeshStandardMaterial({
-                    color: 0xFFD700,
-                    emissive: 0xFFD700,
-                    emissiveIntensity: 0.5
-                })
-            );
+            const memory = new THREE.Mesh(memoryGeometry, memoryMaterial);
             memory.position.set(
                 Math.random() * 40 - 20,
-                1,
+                1.5,
                 Math.random() * 40 - 20
             );
             memory.castShadow = true;
-            this.collectibles.push(memory);
             this.scene.add(memory);
+            this.collectibles = this.collectibles || [];
+            this.collectibles.push(memory);
         }
     }
 
-    setupGameSystems() {
-        // Controls
-        this.velocity = new THREE.Vector3();
-        this.moveSpeed = 5;
-        document.addEventListener('keydown', (e) => this.handleInput(e, true));
-        document.addEventListener('keyup', (e) => this.handleInput(e, false));
-
-        // Collision Configuration
-        this.raycaster = new THREE.Raycaster();
-        this.collisionObjects = this.collectibles;
+    createCityscape() {
+        // 7. Complex Buildings
+        for(let i = 0; i < 20; i++) {
+            const building = new THREE.Mesh(
+                new THREE.BoxGeometry(5, 10 + Math.random() * 20, 5),
+                new THREE.MeshStandardMaterial({
+                    color: 0x808080,
+                    metalness: 0.4,
+                    roughness: 0.6
+                })
+            );
+            building.position.set(
+                Math.random() * 100 - 50,
+                5,
+                Math.random() * 100 - 50
+            );
+            building.castShadow = true;
+            this.scene.add(building);
+        }
     }
 
-    handleInput(event, isPressed) {
-        const keyState = {
-            'w': 'forward',
-            's': 'backward',
-            'a': 'left',
-            'd': 'right'
-        }[event.key.toLowerCase()];
-
-        if(keyState) this[keyState] = isPressed;
-    }
-
-    updatePlayer(delta) {
-        this.velocity.set(0, 0, 0);
+    setupPostProcessing() {
+        // 8. Bloom Effect
+        this.composer = new THREE.EffectComposer(this.renderer);
+        this.composer.addPass(new THREE.RenderPass(this.scene, this.camera));
         
-        if(this.forward) this.velocity.z = -this.moveSpeed;
-        if(this.backward) this.velocity.z = this.moveSpeed;
-        if(this.left) this.velocity.x = -this.moveSpeed;
-        if(this.right) this.velocity.x = this.moveSpeed;
-        
-        this.player.position.add(this.velocity.multiplyScalar(delta));
-        this.player.position.clamp(
-            new THREE.Vector3(-40, 0.5, -40),
-            new THREE.Vector3(40, 10, 40)
+        this.bloomPass = new THREE.UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5, 0.4, 0.85
         );
-    }
-
-    checkCollisions() {
-        this.collectibles.forEach((mem, index) => {
-            if(mem.position.distanceTo(this.player.position) < 1.5) {
-                this.scene.remove(mem);
-                this.collectibles.splice(index, 1);
-                document.getElementById('score').textContent = 12 - this.collectibles.length;
-            }
-        });
-    }
-
-    setupDebugging() {
-        // FPS Counter
-        this.fps = 0;
-        this.lastFrame = performance.now();
-        
-        // Debug Info Updater
-        setInterval(() => {
-            const debugInfo = [
-                `Three.js: ${this.initState.threejs ? 'OK' : 'FAIL'}`,
-                `Renderer: ${this.initState.renderer ? 'OK' : 'FAIL'}`,
-                `Scene: ${this.initState.scene ? 'OK' : 'FAIL'}`,
-                `Camera: ${this.initState.camera ? 'OK' : 'FAIL'}`,
-                `FPS: ${this.fps.toFixed(1)}`,
-                `Player Position: ${this.player.position.toArray().map(v => v.toFixed(1))}`
-            ].join('\n');
-            
-            document.getElementById('debug').textContent = debugInfo;
-        }, 100);
+        this.composer.addPass(this.bloomPass);
     }
 
     animate() {
-        const now = performance.now();
-        const delta = (now - this.lastFrame) / 1000;
-        this.lastFrame = now;
-        this.fps = 1 / delta;
-
-        try {
-            this.updatePlayer(delta);
-            this.checkCollisions();
-            this.renderer.render(this.scene, this.camera);
-        } catch (error) {
-            this.showFatalError(error);
-            return;
+        requestAnimationFrame(() => this.animate());
+        
+        // 9. Dynamic Elements
+        if(this.collectibles) {
+            this.collectibles.forEach(mem => {
+                mem.rotation.y += 0.01;
+                mem.position.y = Math.sin(Date.now() * 0.001) * 0.5 + 1.5;
+            });
         }
 
-        requestAnimationFrame(() => this.animate());
-    }
-
-    showFatalError(error) {
-        document.body.innerHTML = `
-            <div style="color: red; padding: 20px; font-family: monospace;">
-                <h2>Critical Error</h2>
-                <pre>${error.stack}</pre>
-                <p>Init State: ${JSON.stringify(this.initState, null, 2)}</p>
-            </div>
-        `;
+        // 10. Performance Monitoring
+        document.getElementById('fps').textContent = Math.round(this.renderer.info.render.frame / 1000);
+        
+        this.composer.render();
     }
 }
 
-// Start Game with Error Protection
-try {
-    new MemoryQuest();
-} catch (error) {
-    document.body.innerHTML = `<h1 style="color: red;">Fatal Error: ${error.message}</h1>`;
-}
+// Start Game
+new AAA_Game();
 </script>
 </body>
 </html>
