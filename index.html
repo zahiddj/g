@@ -1,140 +1,244 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Nebula Fury - Next-Gen Browser Tech Demo</title>
+    <title>Stellar Miner - Space RPG</title>
     <style>
         * { margin: 0; padding: 0; }
-        body { overflow: hidden; }
-        canvas { width: 100vw; height: 100vh; }
+        body { overflow: hidden; background: #000; }
+        canvas { display: block; }
         #hud {
             position: fixed;
             top: 20px;
             left: 20px;
             color: #fff;
-            font-family: system-ui;
+            font-family: Arial;
             text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
         }
+        #story {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.9);
+            padding: 20px;
+            color: white;
+            max-width: 500px;
+            display: none;
+        }
+        .shop { position: fixed; top: 20px; right: 20px; }
     </style>
 </head>
 <body>
     <div id="hud">
-        <div>FPS: <span id="fps">0</span></div>
-        <div>POLYGONS: <span id="polycount">0</span></div>
+        <div>Credits: $<span id="credits">0</span></div>
+        <div>Health: <span id="health">100</span></div>
+        <div>Level: <span id="level">1</span></div>
     </div>
+    <div id="story">
+        <h2>Chapter 1: The Asteroid Belt</h2>
+        <p>As a rookie space miner, your mission is to collect rare minerals from dangerous asteroid fields...</p>
+        <button onclick="startGame()">Begin Mission</button>
+    </div>
+    <div class="shop" style="display:none;">
+        <h3>Space Station Shop</h3>
+        <button onclick="buyUpgrade('shield')">Upgrade Shield ($500)</button>
+        <button onclick="buyUpgrade('laser')">Upgrade Laser ($300)</button>
+    </div>
+    <canvas id="gameCanvas"></canvas>
 
-<script type="module">
-import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
-import { EffectComposer } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/RenderPass.js';
-import { SMAAPass } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/postprocessing/SMAAPass.js';
+<script>
+'use strict';
 
-class TechDemo {
-    constructor() {
-        this.init();
+const game = {
+    canvas: null,
+    ctx: null,
+    player: {
+        x: 400, y: 500,
+        width: 40, height: 40,
+        speed: 5,
+        health: 100,
+        maxHealth: 100,
+        laserPower: 1,
+        coins: 0,
+        level: 1
+    },
+    asteroids: [],
+    enemies: [],
+    projectiles: [],
+    particles: [],
+    keys: {},
+    wave: 1,
+    gameTime: 0,
+    isMobile: /Mobi|Android/i.test(navigator.userAgent)
+};
+
+// Story and Game Flow
+document.getElementById('story').style.display = 'block';
+
+function startGame() {
+    document.getElementById('story').style.display = 'none';
+    document.querySelector('.shop').style.display = 'block';
+    init();
+}
+
+function init() {
+    game.canvas = document.getElementById('gameCanvas');
+    game.ctx = game.canvas.getContext('2d');
+    game.canvas.width = 800;
+    game.canvas.height = 600;
+
+    // Event Listeners
+    document.addEventListener('keydown', e => game.keys[e.key] = true);
+    document.addEventListener('keyup', e => game.keys[e.key] = false);
+
+    if(game.isMobile) {
+        document.getElementById('mobileControls').style.display = 'flex';
+        // Add touch event listeners
     }
 
-    async init() {
-        // Core Systems
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
-        this.clock = new THREE.Clock();
-        
-        // Configuration
-        this.config = {
-            POST_PROCESSING: true,
-            DYNAMIC_LOD: true,
-            PARTICLE_COUNT: 5000
-        };
+    gameLoop();
+}
 
-        // Initialize
-        this.setupRenderer();
-        this.createEnvironment();
-        this.setupPostProcessing();
-        this.createTechArt();
-        this.gameLoop();
+function buyUpgrade(type) {
+    if(type === 'shield' && game.player.coins >= 500) {
+        game.player.maxHealth += 50;
+        game.player.health = game.player.maxHealth;
+        game.player.coins -= 500;
     }
-
-    setupRenderer() {
-        this.renderer.setPixelRatio(window.devicePixelRatio);
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        document.body.appendChild(this.renderer.domElement);
+    if(type === 'laser' && game.player.coins >= 300) {
+        game.player.laserPower++;
+        game.player.coins -= 300;
     }
+    updateHUD();
+}
 
-    createEnvironment() {
-        // HDR Environment
-        const envTexture = new THREE.CubeTextureLoader()
-            .setPath('https://threejs.org/examples/textures/cube/pisa/')
-            .load(['px.png', 'nx.png', 'py.png', 'ny.png', 'pz.png', 'nz.png']);
-        this.scene.environment = envTexture;
+function updateHUD() {
+    document.getElementById('credits').textContent = game.player.coins;
+    document.getElementById('health').textContent = game.player.health;
+    document.getElementById('level').textContent = game.player.level;
+}
 
-        // Terrain
-        const terrainGeometry = new THREE.PlaneGeometry(100, 100, 100, 100);
-        const terrainMaterial = new THREE.MeshStandardMaterial({
-            color: 0x303030,
-            metalness: 0.8,
-            roughness: 0.2
-        });
-        this.terrain = new THREE.Mesh(terrainGeometry, terrainMaterial);
-        this.terrain.rotation.x = -Math.PI / 2;
-        this.scene.add(this.terrain);
+function spawnAsteroid() {
+    game.asteroids.push({
+        x: Math.random() * game.canvas.width,
+        y: -50,
+        size: 20 + Math.random() * 30,
+        speed: 1 + game.wave * 0.2,
+        value: 10 * game.wave
+    });
+}
 
-        // Dynamic Lighting
-        const light = new THREE.DirectionalLight(0xffffff, 1);
-        light.position.set(0, 50, 0);
-        light.castShadow = true;
-        this.scene.add(light);
-    }
+function spawnEnemy() {
+    game.enemies.push({
+        x: Math.random() * game.canvas.width,
+        y: -50,
+        width: 40,
+        height: 40,
+        health: 10 * game.wave,
+        speed: 2 + game.wave * 0.1
+    });
+}
 
-    setupPostProcessing() {
-        this.composer = new EffectComposer(this.renderer);
-        this.composer.addPass(new RenderPass(this.scene, this.camera));
-        
-        if(this.renderer.getPixelRatio() === 1) {
-            this.composer.addPass(new SMAAPass());
+function checkCollisions() {
+    // Asteroid collection
+    game.asteroids.forEach((ast, i) => {
+        if(distance(ast.x, ast.y, game.player.x, game.player.y) < ast.size + 30) {
+            game.player.coins += ast.value;
+            game.asteroids.splice(i, 1);
+            createParticles(ast.x, ast.y, '#FFD700');
+            updateHUD();
         }
-    }
+    });
 
-    createTechArt() {
-        // Nanite-style Geometry
-        const complexGeometry = new THREE.IcosahedronGeometry(2, 8);
-        const complexMaterial = new THREE.MeshStandardMaterial({
-            color: 0x00ffff,
-            metalness: 0.9,
-            roughness: 0.1
-        });
-
-        for(let i = 0; i < 100; i++) {
-            const mesh = new THREE.Mesh(complexGeometry, complexMaterial);
-            mesh.position.set(
-                (Math.random() - 0.5) * 50,
-                1,
-                (Math.random() - 0.5) * 50
-            );
-            mesh.castShadow = true;
-            this.scene.add(mesh);
+    // Enemy collisions
+    game.enemies.forEach((enemy, i) => {
+        if(distance(enemy.x, enemy.y, game.player.x, game.player.y) < 40) {
+            game.player.health -= 5;
+            game.enemies.splice(i, 1);
+            createParticles(enemy.x, enemy.y, '#FF0000');
+            updateHUD();
         }
-    }
+    });
+}
 
-    gameLoop() {
-        const delta = this.clock.getDelta();
-        
-        // Update HUD
-        document.getElementById('fps').textContent = Math.round(1 / delta);
-        document.getElementById('polycount').textContent = 
-            this.renderer.info.render.triangles.toLocaleString();
+function distance(x1, y1, x2, y2) {
+    return Math.hypot(x2 - x1, y2 - y1);
+}
 
-        // Render
-        this.composer.render();
-        
-        requestAnimationFrame(() => this.gameLoop());
+function createParticles(x, y, color) {
+    for(let i = 0; i < 10; i++) {
+        game.particles.push({
+            x, y,
+            dx: (Math.random() - 0.5) * 5,
+            dy: (Math.random() - 0.5) * 5,
+            life: 1,
+            color
+        });
     }
 }
 
-// Initialize Demo
-new TechDemo();
+function gameLoop(timestamp) {
+    const deltaTime = timestamp - game.lastTime || 0;
+    game.lastTime = timestamp;
+
+    // Clear canvas
+    game.ctx.fillStyle = '#000';
+    game.ctx.fillRect(0, 0, game.canvas.width, game.canvas.height);
+
+    // Player movement
+    if(game.keys.ArrowLeft) game.player.x -= game.player.speed;
+    if(game.keys.ArrowRight) game.player.x += game.player.speed;
+    game.player.x = Math.max(0, Math.min(game.canvas.width - game.player.width, game.player.x));
+
+    // Spawning
+    if(Math.random() < 0.02) spawnAsteroid();
+    if(Math.random() < 0.01) spawnEnemy();
+
+    // Update entities
+    checkCollisions();
+    drawEntities();
+    
+    // Level progression
+    if(game.player.coins >= game.player.level * 1000) {
+        game.player.level++;
+        game.wave++;
+        document.querySelector('.shop').style.display = 'block';
+    }
+
+    requestAnimationFrame(gameLoop);
+}
+
+function drawEntities() {
+    // Draw player
+    game.ctx.fillStyle = '#00FFFF';
+    game.ctx.fillRect(game.player.x, game.player.y, game.player.width, game.player.height);
+
+    // Draw asteroids
+    game.asteroids.forEach(ast => {
+        game.ctx.fillStyle = '#808080';
+        game.ctx.beginPath();
+        game.ctx.arc(ast.x, ast.y, ast.size, 0, Math.PI * 2);
+        game.ctx.fill();
+    });
+
+    // Draw enemies
+    game.enemies.forEach(enemy => {
+        game.ctx.fillStyle = '#FF0000';
+        game.ctx.fillRect(enemy.x, enemy.y, enemy.width, enemy.height);
+    });
+
+    // Draw particles
+    game.particles.forEach((p, i) => {
+        game.ctx.fillStyle = p.color;
+        game.ctx.globalAlpha = p.life;
+        game.ctx.fillRect(p.x, p.y, 4, 4);
+        game.ctx.globalAlpha = 1;
+        p.x += p.dx;
+        p.y += p.dy;
+        p.life -= 0.02;
+        if(p.life <= 0) game.particles.splice(i, 1);
+    });
+}
 </script>
 </body>
 </html>
