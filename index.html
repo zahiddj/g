@@ -1,35 +1,116 @@
-<!-- Simplified Working Version -->
 <!DOCTYPE html>
 <html>
 <head>
-    <title>3D Collector - Verified Working</title>
-    <style>* { margin: 0; padding: 0; }</style>
+    <title>Working 3D Collector</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; }
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-family: Arial;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+        }
+    </style>
 </head>
 <body>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script>
-        // 1. Basic Scene Setup
-        const scene = new THREE.Scene();
-        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        const renderer = new THREE.WebGLRenderer();
-        renderer.setSize(window.innerWidth, window.innerHeight);
-        document.body.appendChild(renderer.domElement);
+    <div id="hud">Score: <span id="score">0</span></div>
 
-        // 2. Visible Elements
-        const geometry = new THREE.BoxGeometry();
-        const material = new THREE.MeshBasicMaterial({ color: 0x00ff00 });
-        const cube = new THREE.Mesh(geometry, material);
-        scene.add(cube);
-        camera.position.z = 5;
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
 
-        // 3. Animation Loop
-        function animate() {
-            requestAnimationFrame(animate);
-            cube.rotation.x += 0.01;
-            cube.rotation.y += 0.01;
-            renderer.render(scene, camera);
+class WorkingGame {
+    constructor() {
+        this.init();
+        this.createScene();
+        this.setupControls();
+        this.animate();
+    }
+
+    init() {
+        // 1. Basic Three.js Setup
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        this.renderer = new THREE.WebGLRenderer();
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(this.renderer.domElement);
+
+        // 2. Immediate Visibility Check
+        this.renderer.setClearColor(0x87CEEB); // Sky blue background
+    }
+
+    createScene() {
+        // 3. Visible Ground (Green Plane)
+        const ground = new THREE.Mesh(
+            new THREE.PlaneGeometry(100, 100),
+            new THREE.MeshBasicMaterial({ color: 0x00ff00 })
+        );
+        ground.rotation.x = -Math.PI / 2;
+        this.scene.add(ground);
+
+        // 4. Red Player Cube
+        this.player = new THREE.Mesh(
+            new THREE.BoxGeometry(1, 2, 1),
+            new THREE.MeshBasicMaterial({ color: 0xff0000 })
+        );
+        this.player.position.y = 1;
+        this.scene.add(this.player);
+
+        // 5. Yellow Collectibles
+        for(let i = 0; i < 10; i++) {
+            const coin = new THREE.Mesh(
+                new THREE.SphereGeometry(0.5),
+                new THREE.MeshBasicMaterial({ color: 0xffff00 })
+            );
+            coin.position.set(
+                Math.random() * 50 - 25,
+                1,
+                Math.random() * 50 - 25
+            );
+            this.scene.add(coin);
+            this.coins = this.coins || [];
+            this.coins.push(coin);
         }
-        animate();
-    </script>
+
+        // 6. Camera Positioning
+        this.camera.position.set(0, 15, 30);
+        this.camera.lookAt(0, 0, 0);
+    }
+
+    setupControls() {
+        document.addEventListener('keydown', (e) => {
+            const speed = 0.8;
+            switch(e.key) {
+                case 'ArrowUp': this.player.position.z -= speed; break;
+                case 'ArrowDown': this.player.position.z += speed; break;
+                case 'ArrowLeft': this.player.position.x -= speed; break;
+                case 'ArrowRight': this.player.position.x += speed; break;
+            }
+            this.checkCollisions();
+        });
+    }
+
+    checkCollisions() {
+        this.coins.forEach((coin, index) => {
+            if(coin.position.distanceTo(this.player.position) < 1.5) {
+                this.scene.remove(coin);
+                this.coins.splice(index, 1);
+                document.getElementById('score').textContent = this.coins.length;
+            }
+        });
+    }
+
+    animate() {
+        requestAnimationFrame(() => this.animate());
+        this.renderer.render(this.scene, this.camera);
+    }
+}
+
+// Start Game
+new WorkingGame();
+</script>
 </body>
 </html>
