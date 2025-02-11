@@ -1,0 +1,195 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Nebula Fury - Next-Gen Space Combat</title>
+    <style>
+        * { margin: 0; padding: 0; }
+        body { overflow: hidden; background: #000; }
+        #hud {
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            color: #fff;
+            font-family: 'Arial', sans-serif;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.8);
+            z-index: 1000;
+        }
+        canvas { width: 100vw; height: 100vh; }
+    </style>
+</head>
+<body>
+    <div id="hud">
+        <div>INTEGRITY: <span id="health">100%</span></div>
+        <div>ENERGY: <progress id="energy" value="100" max="100"></progress></div>
+        <div>SCORE: <span id="score">0000000</span></div>
+    </div>
+
+<script type="module">
+import * as THREE from 'https://cdn.skypack.dev/three@0.136.0';
+import { OrbitControls } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/controls/OrbitControls.js';
+import { GLTFLoader } from 'https://cdn.skypack.dev/three@0.136.0/examples/jsm/loaders/GLTFLoader.js';
+
+class NebulaFury {
+    constructor() {
+        this.init();
+    }
+
+    async init() {
+        // Core Systems
+        this.scene = new THREE.Scene();
+        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+        this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+        this.clock = new THREE.Clock();
+        this.mixers = [];
+        
+        // Configuration
+        this.config = {
+            BLOOM_LAYER: 1,
+            SHIP_SPEED: 25,
+            FIRE_RATE: 0.1,
+            ENEMY_SPAWN_RATE: 2.0
+        };
+
+        // Game State
+        this.score = 0;
+        this.energy = 100;
+        this.weapons = ['PHOTON', 'PLASMA', 'QUANTUM'];
+        this.currentWeapon = 0;
+
+        // Setup Renderer
+        this.renderer.setSize(window.innerWidth, window.innerHeight);
+        this.renderer.shadowMap.enabled = true;
+        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        document.body.appendChild(this.renderer.domElement);
+
+        // Lighting
+        this.addEnvironmentalLighting();
+        
+        // Player Ship
+        await this.loadPlayerShip();
+        
+        // Post Processing
+        this.setupPostEffects();
+        
+        // Game Loop
+        this.gameLoop();
+    }
+
+    async loadPlayerShip() {
+        const loader = new GLTFLoader();
+        const ship = await loader.loadAsync('https://cdn.jsdelivr.net/gh/mrdoob/three.js/examples/models/gltf/X-Wing.glb');
+        this.player = ship.scene;
+        this.player.position.set(0, 0, 50);
+        this.player.traverse(child => {
+            if (child.isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+            }
+        });
+        this.scene.add(this.player);
+    }
+
+    addEnvironmentalLighting() {
+        const ambient = new THREE.AmbientLight(0x404040);
+        this.scene.add(ambient);
+
+        const directional = new THREE.DirectionalLight(0xffffff, 1);
+        directional.position.set(0, 3, 5);
+        directional.castShadow = true;
+        this.scene.add(directional);
+
+        // Star Field
+        const stars = new THREE.BufferGeometry();
+        const starVertices = [];
+        for (let i = 0; i < 10000; i++) {
+            starVertices.push(
+                Math.random() * 2000 - 1000,
+                Math.random() * 2000 - 1000,
+                Math.random() * 2000 - 1000
+            );
+        }
+        stars.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3));
+        const starMaterial = new THREE.PointsMaterial({ color: 0xFFFFFF, size: 0.7 });
+        const starField = new THREE.Points(stars, starMaterial);
+        this.scene.add(starField);
+    }
+
+    setupPostEffects() {
+        // Bloom Effect
+        this.bloomPass = new UnrealBloomPass(
+            new THREE.Vector2(window.innerWidth, window.innerHeight),
+            1.5,
+            0.4,
+            0.85
+        );
+        
+        this.composer = new EffectComposer(this.renderer);
+        this.composer.addPass(new RenderPass(this.scene, this.camera));
+        this.composer.addPass(this.bloomPass);
+    }
+
+    spawnEnemy() {
+        const geometry = new THREE.IcosahedronGeometry(3, 2);
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xff0000,
+            emissive: 0x550000,
+            metalness: 0.5,
+            roughness: 0.5
+        });
+        const enemy = new THREE.Mesh(geometry, material);
+        enemy.position.set(
+            (Math.random() - 0.5) * 100,
+            (Math.random() - 0.5) * 50,
+            -200
+        );
+        enemy.castShadow = true;
+        this.scene.add(enemy);
+    }
+
+    fireWeapon() {
+        const weaponGeometry = new THREE.CylinderGeometry(0.1, 0.1, 2, 8);
+        const weaponMaterial = new THREE.MeshStandardMaterial({
+            color: 0x00ff00,
+            emissive: 0x00ff00,
+            transparent: true,
+            opacity: 0.8
+        });
+        const projectile = new THREE.Mesh(weaponGeometry, weaponMaterial);
+        projectile.position.copy(this.player.position);
+        projectile.rotation.x = Math.PI / 2;
+        this.scene.add(projectile);
+    }
+
+    gameLoop() {
+        const delta = this.clock.getDelta();
+        
+        // Update Systems
+        this.updatePlayer(delta);
+        this.updateProjectiles(delta);
+        this.updateEnemies(delta);
+        
+        // Render
+        this.composer.render();
+        
+        requestAnimationFrame(() => this.gameLoop());
+    }
+
+    updatePlayer(delta) {
+        // Advanced Movement System
+        if (this.keys.ArrowLeft) this.player.rotation.z += 0.1 * delta;
+        if (this.keys.ArrowRight) this.player.rotation.z -= 0.1 * delta;
+        if (this.keys.ArrowUp) this.player.position.y += this.config.SHIP_SPEED * delta;
+        if (this.keys.ArrowDown) this.player.position.y -= this.config.SHIP_SPEED * delta;
+    }
+}
+
+// Initialize Game
+new NebulaFury();
+</script>
+
+<!-- Include Three.js Addons -->
+<script async src="https://cdn.jsdelivr.net/npm/three@0.136.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/three@0.136.0/examples/js/postprocessing/RenderPass.js"></script>
+<script async src="https://cdn.jsdelivr.net/npm/three@0.136.0/examples/js/postprocessing/UnrealBloomPass.js"></script>
+</body>
+</html>
